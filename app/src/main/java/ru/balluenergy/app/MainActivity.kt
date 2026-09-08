@@ -28,11 +28,11 @@ class MainViewModel : ViewModel() {
     val devices = _devices.asStateFlow()
     private var challenge: HommynAuth.Challenge? = null
 
-    fun requestCode(phone: String) {
+    fun requestCode(context: android.content.Context, phone: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                challenge = HommynAuth.init(phone)
-                _message.value = "v0.3.0: код отправлен. Challenge=${challenge?.challenge}. Введите код из SMS."
+                challenge = HommynAuth.init(context.applicationContext, phone)
+                _message.value = "v0.3.4: код отправлен. Challenge=${challenge?.challenge}. Введите код из SMS."
             } catch (e: Exception) {
                 _message.value = "Ошибка запроса SMS: ${e.message ?: "неизвестная ошибка"}"
             }
@@ -43,7 +43,7 @@ class MainViewModel : ViewModel() {
         val ch = challenge ?: run { _message.value = "Сначала запросите код."; return }
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                _message.value = "v0.3.0: отправляю SMS-код на /auth/${ch.challenge}…"
+                _message.value = "v0.3.4: отправляю SMS-код на /auth/${ch.challenge}…"
                 val result = try {
                     HommynAuth.authorize(ch.session, ch.challenge, code)
                 } catch (e: HommynApiException) {
@@ -87,7 +87,7 @@ fun BalluEnergyScreen(vm: MainViewModel = viewModel()) {
     val message by vm.message.collectAsState()
     val devices by vm.devices.collectAsState()
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Ballu Energy v0.3.0") }) }) { pad ->
+    Scaffold(topBar = { TopAppBar(title = { Text("Ballu Energy v0.3.4") }) }) { pad ->
         Column(
             Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(pad).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -95,7 +95,7 @@ fun BalluEnergyScreen(vm: MainViewModel = viewModel()) {
             Text("Вход в Hommyn", style = MaterialTheme.typography.headlineSmall)
             Text("Авторизация выполняется напрямую с сервером Hommyn.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(value = phone, onValueChange = { phone = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Телефон") }, singleLine = true)
-            Button(onClick = { vm.requestCode(phone) }, modifier = Modifier.fillMaxWidth(), enabled = phone.isNotBlank()) { Text("Получить код") }
+            Button(onClick = { vm.requestCode(vmContext(), phone) }, modifier = Modifier.fillMaxWidth(), enabled = phone.isNotBlank()) { Text("Получить код") }
             OutlinedTextField(value = code, onValueChange = { code = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Код из SMS") }, singleLine = true)
             Button(onClick = { vm.authorize(code) }, modifier = Modifier.fillMaxWidth(), enabled = code.isNotBlank()) { Text("Войти") }
             if (message.isNotBlank()) Text(message)
@@ -116,3 +116,6 @@ fun BalluEnergyScreen(vm: MainViewModel = viewModel()) {
         }
     }
 }
+
+@Composable
+private fun vmContext(): android.content.Context = androidx.compose.ui.platform.LocalContext.current
