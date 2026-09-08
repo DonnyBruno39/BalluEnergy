@@ -9,9 +9,9 @@ import java.net.URL
 object HommynApi {
     private const val HOST = "https://user-iot.api.rusklimat.ru"
 
-    // Recovered from the Hommyn 39 APK. The generic /devices route returns
-    // RESOURCE_NOT_FOUND on the current API, so keep the known authenticated route.
-    private const val DEVICES_PATH = "/devices/all/short"
+    // The authenticated Hommyn user API exposes devices at /devices.
+    // /devices/all/short returns RESOURCE_NOT_FOUND on the current API.
+    private const val DEVICES_PATH = "/devices"
 
     data class Device(
         val id: String?, val mac: String?, val name: String?, val model: String?,
