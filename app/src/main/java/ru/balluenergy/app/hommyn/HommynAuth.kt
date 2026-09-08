@@ -1,14 +1,14 @@
 package ru.balluenergy.app.hommyn
 
+import android.content.Context
 import android.os.Build
-import android.util.Base64
+import com.google.android.gms.auth.api.identity.Identity
 import com.google.gson.Gson
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import java.security.SecureRandom
 import java.util.concurrent.TimeUnit
 
 /** Hommyn challenge/response authentication client. */
@@ -21,38 +21,38 @@ object HommynAuth {
         .readTimeout(20, TimeUnit.SECONDS)
         .build()
     private val gson = Gson()
-    private val random = SecureRandom()
 
     data class Challenge(val session: String, val challenge: String, val raw: JSONObject)
     data class AuthResult(val accessToken: String, val raw: JSONObject)
 
-    fun init(phone: String): Challenge {
+    fun init(context: Context, phone: String): Challenge {
         val value = phone.trim()
         require(value.isNotBlank()) { "phone is empty" }
 
-        // Hommyn 1.18.3 creates one Google Sign-In client object and puts the
-        // same object into both deviceInfo and client. Its object contains a
-        // random 16-byte value encoded with Base64 URL_SAFE|NO_WRAP|NO_PADDING.
-        val bytes = ByteArray(16)
-        random.nextBytes(bytes)
-        val clientId = Base64.encodeToString(
-            bytes,
-            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
-        )
-        val clientInfo = mapOf("zbd" to clientId)
+        // Reproduce ApiService.initAuth() from Hommyn 1.18.3:
+        // deviceInfo and client are two separate instances returned by
+        // a/a.C(Context), i.e. the real Google Identity SignInClient (zbap).
+        val deviceInfo = Identity.getSignInClient(context)
+        val client = Identity.getSignInClient(context)
+
+        val locales = ArrayList<String>()
+        val localeList = context.resources.configuration.locales
+        for (i in 0 until localeList.size()) {
+            locales.add(localeList[i].toString())
+        }
 
         val body = linkedMapOf<String, Any>(
             (if (Regex("^\\+?\\d+$").matches(value)) "phone" else "email") to value,
             "platform" to "android",
             "osVersion" to (Build.VERSION.RELEASE ?: "unknown"),
-            "vendor" to (Build.MANUFACTURER ?: "unknown"),
+            "vendor" to (Build.BRAND ?: "unknown"),
             "model" to (Build.MODEL ?: "unknown"),
-            "name" to "Ballu Energy",
-            "deviceInfo" to clientInfo,
-            "locales" to listOf(java.util.Locale.getDefault().toString()),
+            "name" to (Build.USER ?: "unknown"),
+            "deviceInfo" to deviceInfo,
+            "locales" to locales,
             "bundle" to "com.hommyn.app",
             "version" to "1.18.3",
-            "client" to clientInfo
+            "client" to client
         )
         val json = request(AUTH_PATH, gson.toJson(body))
         val session = json.optString("session")
