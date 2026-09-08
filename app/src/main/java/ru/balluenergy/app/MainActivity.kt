@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import ru.balluenergy.app.hommyn.HommynApi
+import ru.balluenergy.app.hommyn.HommynApiException
 import ru.balluenergy.app.hommyn.HommynAuth
 
 class MainViewModel : ViewModel() {
@@ -33,7 +34,7 @@ class MainViewModel : ViewModel() {
                 challenge = HommynAuth.init(phone)
                 _message.value = "Код отправлен. Введите код из SMS."
             } catch (e: Exception) {
-                _message.value = "Ошибка авторизации: ${e.message ?: "неизвестная ошибка"}"
+                _message.value = "Ошибка запроса SMS: ${e.message ?: "неизвестная ошибка"}"
             }
         }
     }
@@ -43,11 +44,20 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val result = HommynAuth.authorize(ch.session, ch.challenge, code)
-                val list = HommynApi.getDevices(result.accessToken)
-                _devices.value = list
-                _message.value = if (list.isEmpty()) "Авторизация успешна, устройств не найдено." else "Подключено устройств: ${list.size}"
+                _message.value = "Код принят. Загружаю устройства…"
+                try {
+                    val list = HommynApi.getDevices(result.accessToken)
+                    _devices.value = list
+                    _message.value = if (list.isEmpty()) {
+                        "Вход выполнен. Устройств не найдено."
+                    } else {
+                        "Вход выполнен. Подключено устройств: ${list.size}"
+                    }
+                } catch (e: HommynApiException) {
+                    _message.value = "Вход выполнен, но список устройств не загрузился: HTTP ${e.code}: ${e.response}"
+                }
             } catch (e: Exception) {
-                _message.value = "Ошибка: ${e.message ?: "неизвестная ошибка"}"
+                _message.value = "Ошибка входа в Hommyn: ${e.message ?: "неизвестная ошибка"}"
             }
         }
     }
