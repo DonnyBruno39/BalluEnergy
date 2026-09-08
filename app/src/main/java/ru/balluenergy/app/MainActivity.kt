@@ -32,7 +32,7 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 challenge = HommynAuth.init(phone)
-                _message.value = "Код отправлен. Введите код из SMS."
+                _message.value = "v0.3.0: код отправлен. Challenge=${challenge?.challenge}. Введите код из SMS."
             } catch (e: Exception) {
                 _message.value = "Ошибка запроса SMS: ${e.message ?: "неизвестная ошибка"}"
             }
@@ -43,7 +43,12 @@ class MainViewModel : ViewModel() {
         val ch = challenge ?: run { _message.value = "Сначала запросите код."; return }
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val result = HommynAuth.authorize(ch.session, ch.challenge, code)
+                _message.value = "v0.3.0: отправляю SMS-код на /auth/${ch.challenge}…"
+                val result = try {
+                    HommynAuth.authorize(ch.session, ch.challenge, code)
+                } catch (e: HommynApiException) {
+                    throw HommynStageException("авторизации SMS (/auth/${ch.challenge})", e)
+                }
                 _message.value = "Код принят. Загружаю устройства…"
                 try {
                     val list = HommynApi.getDevices(result.accessToken)
@@ -56,12 +61,16 @@ class MainViewModel : ViewModel() {
                 } catch (e: HommynApiException) {
                     _message.value = "Вход выполнен, но список устройств не загрузился: HTTP ${e.code}: ${e.response}"
                 }
+            } catch (e: HommynStageException) {
+                _message.value = "Ошибка этапа ${e.stage}: HTTP ${e.cause?.let { (it as? HommynApiException)?.code } ?: "?"}: ${e.cause?.message ?: "неизвестная ошибка"}"
             } catch (e: Exception) {
                 _message.value = "Ошибка входа в Hommyn: ${e.message ?: "неизвестная ошибка"}"
             }
         }
     }
 }
+
+class HommynStageException(val stage: String, cause: Throwable) : Exception(cause)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -78,42 +87,18 @@ fun BalluEnergyScreen(vm: MainViewModel = viewModel()) {
     val message by vm.message.collectAsState()
     val devices by vm.devices.collectAsState()
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Ballu Energy") }) }) { pad ->
+    Scaffold(topBar = { TopAppBar(title = { Text("Ballu Energy v0.3.0") }) }) { pad ->
         Column(
             Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(pad).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text("Вход в Hommyn", style = MaterialTheme.typography.headlineSmall)
             Text("Авторизация выполняется напрямую с сервером Hommyn.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-            OutlinedTextField(
-                value = phone,
-                onValueChange = { phone = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Телефон") },
-                singleLine = true
-            )
-            Button(
-                onClick = { vm.requestCode(phone) },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = phone.isNotBlank()
-            ) { Text("Получить код") }
-
-            OutlinedTextField(
-                value = code,
-                onValueChange = { code = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Код из SMS") },
-                singleLine = true
-            )
-            Button(
-                onClick = { vm.authorize(code) },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = code.isNotBlank()
-            ) { Text("Войти") }
-
+            OutlinedTextField(value = phone, onValueChange = { phone = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Телефон") }, singleLine = true)
+            Button(onClick = { vm.requestCode(phone) }, modifier = Modifier.fillMaxWidth(), enabled = phone.isNotBlank()) { Text("Получить код") }
+            OutlinedTextField(value = code, onValueChange = { code = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Код из SMS") }, singleLine = true)
+            Button(onClick = { vm.authorize(code) }, modifier = Modifier.fillMaxWidth(), enabled = code.isNotBlank()) { Text("Войти") }
             if (message.isNotBlank()) Text(message)
-
             if (devices.isNotEmpty()) {
                 Text("Мои устройства", style = MaterialTheme.typography.titleLarge)
                 devices.forEach { d ->
