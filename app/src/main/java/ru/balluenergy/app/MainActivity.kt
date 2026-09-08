@@ -22,6 +22,8 @@ import ru.balluenergy.app.hommyn.HommynApi
 import ru.balluenergy.app.hommyn.HommynApiException
 import ru.balluenergy.app.hommyn.HommynAuth
 
+private const val APP_VERSION = "0.3.7"
+
 class MainViewModel : ViewModel() {
     private val _message = MutableStateFlow("")
     val message = _message.asStateFlow()
@@ -32,8 +34,11 @@ class MainViewModel : ViewModel() {
     fun requestCode(context: android.content.Context, phone: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                _message.value = "Запрашиваю код…"
                 challenge = HommynAuth.init(context.applicationContext, phone)
-                _message.value = "v0.3.4: код отправлен. Challenge=${challenge?.challenge}. Введите код из SMS."
+                _message.value = "Код отправлен. Challenge=${challenge?.challenge}. Введите код из SMS."
+            } catch (e: HommynApiException) {
+                _message.value = formatApiError("запроса SMS", e)
             } catch (e: Exception) {
                 _message.value = "Ошибка запроса SMS: ${e.message ?: "неизвестная ошибка"}"
             }
@@ -44,34 +49,29 @@ class MainViewModel : ViewModel() {
         val ch = challenge ?: run { _message.value = "Сначала запросите код."; return }
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                _message.value = "v0.3.4: отправляю SMS-код на /auth/${ch.challenge}…"
-                val result = try {
-                    HommynAuth.authorize(ch.session, ch.challenge, code)
-                } catch (e: HommynApiException) {
-                    throw HommynStageException("авторизации SMS (/auth/${ch.challenge})", e)
-                }
+                _message.value = "Проверяю SMS-код…"
+                val result = HommynAuth.authorize(ch.session, ch.challenge, code)
                 _message.value = "Код принят. Загружаю устройства…"
-                try {
-                    val list = HommynApi.getDevices(result.accessToken)
-                    _devices.value = list
-                    _message.value = if (list.isEmpty()) {
-                        "Вход выполнен. Устройств не найдено."
-                    } else {
-                        "Вход выполнен. Подключено устройств: ${list.size}"
-                    }
-                } catch (e: HommynApiException) {
-                    _message.value = "Вход выполнен, но список устройств не загрузился: HTTP ${e.code}: ${e.response}"
+                val list = HommynApi.getDevices(result.accessToken)
+                _devices.value = list
+                _message.value = if (list.isEmpty()) {
+                    "Вход выполнен. Устройств в облаке не найдено."
+                } else {
+                    "Вход выполнен. Устройств найдено: ${list.size}"
                 }
-            } catch (e: HommynStageException) {
-                _message.value = "Ошибка этапа ${e.stage}: HTTP ${e.cause?.let { (it as? HommynApiException)?.code } ?: "?"}: ${e.cause?.message ?: "неизвестная ошибка"}"
+            } catch (e: HommynApiException) {
+                _message.value = formatApiError("авторизации/загрузки устройств", e)
             } catch (e: Exception) {
                 _message.value = "Ошибка входа в Hommyn: ${e.message ?: "неизвестная ошибка"}"
             }
         }
     }
-}
 
-class HommynStageException(val stage: String, cause: Throwable) : Exception(cause)
+    private fun formatApiError(stage: String, e: HommynApiException): String {
+        val body = e.response.trim().replace("\\n", " ").take(500)
+        return "Ошибка $stage: HTTP ${e.code}${if (body.isNotBlank()) ": $body" else ""}"
+    }
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -89,7 +89,7 @@ fun BalluEnergyScreen(vm: MainViewModel = viewModel()) {
     val devices by vm.devices.collectAsState()
     val context = LocalContext.current
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Ballu Energy v0.3.4") }) }) { pad ->
+    Scaffold(topBar = { TopAppBar(title = { Text("Ballu Energy v$APP_VERSION") }) }) { pad ->
         Column(
             Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(pad).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
