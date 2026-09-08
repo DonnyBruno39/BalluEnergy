@@ -23,8 +23,8 @@ object HommynApi {
             connectTimeout = 15_000
             readTimeout = 20_000
             setRequestProperty("Accept", "application/json")
-            setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("User-Agent", "Hommyn/1.19.0 (Android)")
             if (!ifModifiedSince.isNullOrBlank()) setRequestProperty("If-Modified-Since", ifModifiedSince)
         }
         try {
@@ -45,6 +45,7 @@ object HommynApi {
             root.opt("items") is JSONArray -> root.getJSONArray("items")
             root.opt("result") is JSONArray -> root.getJSONArray("result")
             root.optJSONObject("data")?.opt("devices") is JSONArray -> root.getJSONObject("data").getJSONArray("devices")
+            root.optJSONObject("result")?.opt("devices") is JSONArray -> root.getJSONObject("result").getJSONArray("devices")
             else -> JSONArray()
         }
         return buildList(array.length()) {
