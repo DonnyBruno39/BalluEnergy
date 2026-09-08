@@ -8,8 +8,7 @@ import java.util.UUID
 /** Hommyn challenge/response authentication client. */
 object HommynAuth {
     private const val HOST = "https://auth-iot.api.rusklimat.ru"
-    private const val INIT_PATH = "/auth/init"
-    private const val RESPONSE_PATH = "/auth/response"
+    private const val AUTH_PATH = "/auth"
 
     data class Challenge(
         val session: String,
@@ -37,7 +36,7 @@ object HommynAuth {
             put("version", "1.18.3")
             put("client", "android")
         }
-        val json = request(INIT_PATH, "POST", body.toString())
+        val json = request(AUTH_PATH, "POST", body.toString())
         val session = json.optString("session")
         val challenge = json.optString("challenge")
         if (session.isBlank() || challenge.isBlank()) throw HommynApiException(200, json.toString())
@@ -45,12 +44,14 @@ object HommynAuth {
     }
 
     fun authorize(session: String, challenge: String, response: String): AuthResult {
+        // Hommyn uses the challenge type as the second path segment, e.g. /auth/SMS_CODE.
+        val path = "$AUTH_PATH/${challenge.trim()}"
         val body = JSONObject().apply {
             put("session", session)
             put("challenge", challenge)
             put("response", response)
         }
-        val json = request(RESPONSE_PATH, "POST", body.toString())
+        val json = request(path, "POST", body.toString())
         val token = json.optString("access_token").ifBlank { json.optString("accessToken") }
         if (token.isBlank()) throw HommynApiException(200, json.toString())
         return AuthResult(token, json)
