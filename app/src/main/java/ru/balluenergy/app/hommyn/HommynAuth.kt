@@ -28,7 +28,7 @@ object HommynAuth {
         val value = phone.trim()
         require(value.isNotBlank()) { "phone is empty" }
         val body = linkedMapOf<String, Any>(
-            if (Regex("^\\+?\\d+$").matches(value)) "phone" else "email" to value,
+            (if (Regex("^\\+?\\d+$").matches(value)) "phone" else "email") to value,
             "platform" to "android",
             "osVersion" to (Build.VERSION.RELEASE ?: "unknown"),
             "vendor" to (Build.MANUFACTURER ?: "unknown"),
@@ -48,7 +48,6 @@ object HommynAuth {
     }
 
     fun authorize(session: String, challenge: String, response: String): AuthResult {
-        // Exact enum names used by the original Hommyn AuthChallenge enum.
         val normalized = when (challenge.trim().uppercase()) {
             "SMS", "SMS_CODE", "SMSCODE" -> "SMS_CODE"
             "EMAIL", "EMAIL_CODE", "EMAILCODE" -> "EMAIL_CODE"
