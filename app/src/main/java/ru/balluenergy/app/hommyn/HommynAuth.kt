@@ -19,9 +19,14 @@ object HommynAuth {
     data class AuthResult(val accessToken: String, val raw: JSONObject)
 
     fun init(phone: String): Challenge {
+        val value = phone.trim()
+        require(value.isNotBlank()) { "phone is empty" }
+
+        // The original Hommyn ApiService sends either phone or email,
+        // rather than a separate "login" field.
         val body = JSONObject().apply {
-            put("login", phone)
-            put("phone", phone)
+            if (Regex("^\\+?\\d+$").matches(value)) put("phone", value)
+            else put("email", value)
             put("platform", "android")
             put("osVersion", android.os.Build.VERSION.RELEASE ?: "unknown")
             put("vendor", android.os.Build.MANUFACTURER ?: "unknown")
@@ -31,7 +36,7 @@ object HommynAuth {
                 put("id", UUID.randomUUID().toString())
                 put("platform", "android")
             })
-            put("locales", java.util.Locale.getDefault().toLanguageTag())
+            put("locales", java.util.Locale.getDefault().toString())
             put("bundle", "com.hommyn.app")
             put("version", "1.18.3")
             put("client", "android")
@@ -44,7 +49,8 @@ object HommynAuth {
     }
 
     fun authorize(session: String, challenge: String, response: String): AuthResult {
-        // Hommyn uses the challenge type as the second path segment, e.g. /auth/SMS_CODE.
+        // The original app appends the challenge enum name to /auth,
+        // e.g. /auth/SMS_CODE.
         val path = "$AUTH_PATH/${challenge.trim()}"
         val body = JSONObject().apply {
             put("session", session)
@@ -65,6 +71,7 @@ object HommynAuth {
             doOutput = true
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("User-Agent", "Hommyn/1.18.3 Android")
         }
         try {
             c.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
