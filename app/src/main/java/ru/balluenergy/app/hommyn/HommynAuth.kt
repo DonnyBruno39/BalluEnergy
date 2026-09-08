@@ -1,45 +1,46 @@
 package ru.balluenergy.app.hommyn
 
+import android.os.Build
+import com.google.gson.Gson
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 /** Hommyn challenge/response authentication client. */
 object HommynAuth {
     private const val HOST = "https://auth-iot.api.rusklimat.ru"
     private const val AUTH_PATH = "/auth"
+    private val jsonMediaType = "application/json".toMediaType()
+    private val http = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .build()
+    private val gson = Gson()
 
-    data class Challenge(
-        val session: String,
-        val challenge: String,
-        val raw: JSONObject
-    )
-
+    data class Challenge(val session: String, val challenge: String, val raw: JSONObject)
     data class AuthResult(val accessToken: String, val raw: JSONObject)
 
     fun init(phone: String): Challenge {
         val value = phone.trim()
         require(value.isNotBlank()) { "phone is empty" }
-
-        val body = JSONObject().apply {
-            if (Regex("^\\+?\\d+$").matches(value)) put("phone", value)
-            else put("email", value)
-            put("platform", "android")
-            put("osVersion", android.os.Build.VERSION.RELEASE ?: "unknown")
-            put("vendor", android.os.Build.MANUFACTURER ?: "unknown")
-            put("model", android.os.Build.MODEL ?: "unknown")
-            put("name", "Ballu Energy")
-            put("deviceInfo", JSONObject().apply {
-                put("id", UUID.randomUUID().toString())
-                put("platform", "android")
-            })
-            put("locales", java.util.Locale.getDefault().toString())
-            put("bundle", "com.hommyn.app")
-            put("version", "1.18.3")
-            put("client", "android")
-        }
-        val json = request(AUTH_PATH, "POST", body.toString())
+        val body = linkedMapOf<String, Any>(
+            if (Regex("^\\+?\\d+$").matches(value)) "phone" else "email" to value,
+            "platform" to "android",
+            "osVersion" to (Build.VERSION.RELEASE ?: "unknown"),
+            "vendor" to (Build.MANUFACTURER ?: "unknown"),
+            "model" to (Build.MODEL ?: "unknown"),
+            "name" to "Ballu Energy",
+            "deviceInfo" to mapOf("id" to UUID.randomUUID().toString(), "platform" to "android"),
+            "locales" to listOf(java.util.Locale.getDefault().toString()),
+            "bundle" to "com.hommyn.app",
+            "version" to "1.18.3",
+            "client" to "android"
+        )
+        val json = request(AUTH_PATH, gson.toJson(body))
         val session = json.optString("session")
         val challenge = json.optString("challenge")
         if (session.isBlank() || challenge.isBlank()) throw HommynApiException(200, json.toString())
@@ -47,8 +48,7 @@ object HommynAuth {
     }
 
     fun authorize(session: String, challenge: String, response: String): AuthResult {
-        // The original Hommyn app uses the AuthChallenge enum name in the URL.
-        // Normalize aliases returned by different API revisions (sms, sms_code, etc.).
+        // Exact enum names used by the original Hommyn AuthChallenge enum.
         val normalized = when (challenge.trim().uppercase()) {
             "SMS", "SMS_CODE", "SMSCODE" -> "SMS_CODE"
             "EMAIL", "EMAIL_CODE", "EMAILCODE" -> "EMAIL_CODE"
@@ -56,34 +56,27 @@ object HommynAuth {
             else -> challenge.trim().uppercase()
         }
         val path = "$AUTH_PATH/$normalized"
-        val body = JSONObject().apply {
-            put("session", session)
-            put("challenge", normalized)
-            put("response", response.trim())
-        }
-        val json = request(path, "POST", body.toString())
+        val body = linkedMapOf(
+            "session" to session,
+            "challenge" to normalized,
+            "response" to response.trim()
+        )
+        val json = request(path, gson.toJson(body))
         val token = json.optString("access_token").ifBlank { json.optString("accessToken") }
         if (token.isBlank()) throw HommynApiException(200, json.toString())
         return AuthResult(token, json)
     }
 
-    private fun request(path: String, method: String, body: String): JSONObject {
-        val c = (URL(HOST + path).openConnection() as HttpURLConnection).apply {
-            requestMethod = method
-            connectTimeout = 15_000
-            readTimeout = 20_000
-            doOutput = true
-            setRequestProperty("Accept", "application/json")
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("User-Agent", "Hommyn/1.18.3 Android")
-        }
-        try {
-            c.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-            val code = c.responseCode
-            val stream = if (code in 200..299) c.inputStream else c.errorStream
-            val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-            if (code !in 200..299) throw HommynApiException(code, text)
+    private fun request(path: String, body: String): JSONObject {
+        val request = Request.Builder()
+            .url(HOST + path)
+            .header("Content-Type", "application/json")
+            .post(body.toRequestBody(jsonMediaType))
+            .build()
+        http.newCall(request).execute().use { response ->
+            val text = response.body?.string().orEmpty()
+            if (!response.isSuccessful) throw HommynApiException(response.code, text)
             return JSONObject(text)
-        } finally { c.disconnect() }
+        }
     }
 }
