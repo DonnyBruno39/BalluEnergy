@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -86,6 +87,7 @@ fun BalluEnergyScreen(vm: MainViewModel = viewModel()) {
     var code by remember { mutableStateOf("") }
     val message by vm.message.collectAsState()
     val devices by vm.devices.collectAsState()
+    val context = LocalContext.current
 
     Scaffold(topBar = { TopAppBar(title = { Text("Ballu Energy v0.3.4") }) }) { pad ->
         Column(
@@ -95,7 +97,7 @@ fun BalluEnergyScreen(vm: MainViewModel = viewModel()) {
             Text("Вход в Hommyn", style = MaterialTheme.typography.headlineSmall)
             Text("Авторизация выполняется напрямую с сервером Hommyn.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(value = phone, onValueChange = { phone = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Телефон") }, singleLine = true)
-            Button(onClick = { vm.requestCode(vmContext(), phone) }, modifier = Modifier.fillMaxWidth(), enabled = phone.isNotBlank()) { Text("Получить код") }
+            Button(onClick = { vm.requestCode(context, phone) }, modifier = Modifier.fillMaxWidth(), enabled = phone.isNotBlank()) { Text("Получить код") }
             OutlinedTextField(value = code, onValueChange = { code = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Код из SMS") }, singleLine = true)
             Button(onClick = { vm.authorize(code) }, modifier = Modifier.fillMaxWidth(), enabled = code.isNotBlank()) { Text("Войти") }
             if (message.isNotBlank()) Text(message)
@@ -116,6 +118,3 @@ fun BalluEnergyScreen(vm: MainViewModel = viewModel()) {
         }
     }
 }
-
-@Composable
-private fun vmContext(): android.content.Context = androidx.compose.ui.platform.LocalContext.current
