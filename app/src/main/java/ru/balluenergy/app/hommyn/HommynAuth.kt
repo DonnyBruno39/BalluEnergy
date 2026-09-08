@@ -22,8 +22,6 @@ object HommynAuth {
         val value = phone.trim()
         require(value.isNotBlank()) { "phone is empty" }
 
-        // The original Hommyn ApiService sends either phone or email,
-        // rather than a separate "login" field.
         val body = JSONObject().apply {
             if (Regex("^\\+?\\d+$").matches(value)) put("phone", value)
             else put("email", value)
@@ -49,13 +47,19 @@ object HommynAuth {
     }
 
     fun authorize(session: String, challenge: String, response: String): AuthResult {
-        // The original app appends the challenge enum name to /auth,
-        // e.g. /auth/SMS_CODE.
-        val path = "$AUTH_PATH/${challenge.trim()}"
+        // The original Hommyn app uses the AuthChallenge enum name in the URL.
+        // Normalize aliases returned by different API revisions (sms, sms_code, etc.).
+        val normalized = when (challenge.trim().uppercase()) {
+            "SMS", "SMS_CODE", "SMSCODE" -> "SMS_CODE"
+            "EMAIL", "EMAIL_CODE", "EMAILCODE" -> "EMAIL_CODE"
+            "PASSWORD", "PASSWORD_VERIFIER", "PASSWORDVERIFIER" -> "PASSWORD_VERIFIER"
+            else -> challenge.trim().uppercase()
+        }
+        val path = "$AUTH_PATH/$normalized"
         val body = JSONObject().apply {
             put("session", session)
-            put("challenge", challenge)
-            put("response", response)
+            put("challenge", normalized)
+            put("response", response.trim())
         }
         val json = request(path, "POST", body.toString())
         val token = json.optString("access_token").ifBlank { json.optString("accessToken") }
