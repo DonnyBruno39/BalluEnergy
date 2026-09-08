@@ -10,8 +10,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -53,8 +51,8 @@ class MainViewModel : ViewModel() {
     val state = _state.asStateFlow()
 
     fun selectPeriod(p: Period) { _state.value = _state.value.copy(period = p) }
-    fun demoHeat() { _state.value = _state.value.copy(percent=50, watts=1000, connected=true) }
-    fun demoStop() { _state.value = _state.value.copy(percent=0, watts=0, connected=true) }
+    fun demoHeat() { _state.value = _state.value.copy(percent = 50, watts = 1000, connected = true) }
+    fun demoStop() { _state.value = _state.value.copy(percent = 0, watts = 0, connected = true) }
 }
 
 class MainActivity : ComponentActivity() {
@@ -72,8 +70,11 @@ fun BalluEnergyScreen(vm: MainViewModel = viewModel()) {
         topBar = { TopAppBar(title = { Text("Ballu Energy") }) }
     ) { pad ->
         Column(
-            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-                .padding(pad).padding(horizontal = 16.dp, vertical = 10.dp),
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(pad)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(s.name, style = MaterialTheme.typography.headlineSmall)
@@ -88,8 +89,8 @@ fun BalluEnergyScreen(vm: MainViewModel = viewModel()) {
             }
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SmallInfo("Температура", "${s.temperature} °C", "Цель ${s.target} °C")
-                SmallInfo("Сегодня", "%.2f кВт·ч".format(s.kwh), "%.2f ₽".format(s.cost))
+                SmallInfo(Modifier.weight(1f), "Температура", "${s.temperature} °C", "Цель ${s.target} °C")
+                SmallInfo(Modifier.weight(1f), "Сегодня", "%.2f кВт·ч".format(s.kwh), "%.2f ₽".format(s.cost))
             }
 
             Text(
@@ -124,8 +125,8 @@ fun BalluEnergyScreen(vm: MainViewModel = viewModel()) {
 }
 
 @Composable
-fun SmallInfo(title: String, value: String, sub: String) {
-    Card(Modifier.weight(1f), shape = RoundedCornerShape(18.dp)) {
+fun SmallInfo(modifier: Modifier, title: String, value: String, sub: String) {
+    Card(modifier, shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.padding(14.dp)) {
             Text(title)
             Text(value, style = MaterialTheme.typography.titleLarge)
@@ -153,7 +154,9 @@ fun PeriodSelector(selected: Period, onSelect: (Period) -> Unit) {
 @Composable
 fun DualChart(points: List<Point>) {
     Canvas(
-        Modifier.fillMaxWidth().height(190.dp)
+        Modifier
+            .fillMaxWidth()
+            .height(190.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp))
             .padding(10.dp)
     ) {
@@ -165,7 +168,7 @@ fun DualChart(points: List<Point>) {
         points.forEachIndexed { i, p ->
             val x = i.toFloat() / (points.size - 1) * w
             val py = h - p.power * (h * .82f) - h * .08f
-            val ty = h - ((p.temperature - 20f) / 2f).coerceIn(0f,1f) * (h*.82f) - h*.08f
+            val ty = h - ((p.temperature - 20f) / 2f).coerceIn(0f, 1f) * (h * .82f) - h * .08f
             if (i == 0) {
                 powerPath.moveTo(x, py)
                 tempPath.moveTo(x, ty)
@@ -174,7 +177,7 @@ fun DualChart(points: List<Point>) {
                 tempPath.lineTo(x, ty)
             }
         }
-        drawPath(powerPath, color = MaterialTheme.colorScheme.primary, style = androidx.compose.ui.graphics.drawscope.Stroke(width=5f))
-        drawPath(tempPath, color = MaterialTheme.colorScheme.secondary, style = androidx.compose.ui.graphics.drawscope.Stroke(width=4f))
+        drawPath(powerPath, color = MaterialTheme.colorScheme.primary, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f))
+        drawPath(tempPath, color = MaterialTheme.colorScheme.secondary, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f))
     }
 }
