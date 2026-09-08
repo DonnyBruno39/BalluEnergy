@@ -33,16 +33,10 @@ object HommynAuth {
         require(value.isNotBlank()) { "phone is empty" }
 
         val primary = buildPayload(context, value, useLegacyMarker = false)
-        return try {
-            parseChallenge(request(AUTH_PATH, gson.toJson(primary)))
-        } catch (e: HommynApiException) {
-            if (e.code == 500 && e.response.contains("SMS_SEND_FAILED", ignoreCase = true)) {
-                val fallback = buildPayload(context, value, useLegacyMarker = true)
-                parseChallenge(request(AUTH_PATH, gson.toJson(fallback)))
-            } else {
-                throw e
-            }
-        }
+        // IMPORTANT: never automatically retry SMS_SEND_FAILED. A retry can consume
+        // another server-side SMS attempt/rate-limit slot. The fallback is intentionally
+        // disabled until the exact production client payload is verified.
+        return parseChallenge(request(AUTH_PATH, gson.toJson(primary)))
     }
 
     fun authorize(session: String, challenge: String, response: String): AuthResult {
@@ -122,7 +116,11 @@ object HommynAuth {
             .build()
         http.newCall(request).execute().use { response ->
             val text = response.body?.string().orEmpty()
-            if (!response.isSuccessful) throw HommynApiException(response.code, text)
+            if (!response.isSuccessful) {
+                val retryAfter = response.header("Retry-After")
+                val suffix = if (!retryAfter.isNullOrBlank()) " Retry-After=$retryAfter" else ""
+                throw HommynApiException(response.code, text + suffix)
+            }
             return try { JSONObject(text) } catch (_: Exception) {
                 throw HommynApiException(response.code, "Invalid JSON response: $text")
             }
